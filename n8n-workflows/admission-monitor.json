@@ -1,0 +1,371 @@
+{
+  "name": "EduNudge - Admission Dropout Monitor",
+  "nodes": [
+    {
+      "id": "1",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [200, 300],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "value": 2
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "2",
+      "name": "HTTP Request - Get Incomplete Applications",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [400, 300],
+      "parameters": {
+        "url": "={{$env.BASE_URL}}/api/students?status=inquiry_submitted&inactive_days=1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": {
+          "name": "Authorization",
+          "value": "Bearer {{$env.API_TOKEN}}"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "3",
+      "name": "Split Into Items",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [600, 300],
+      "parameters": {
+        "batchSize": 1
+      }
+    },
+    {
+      "id": "4",
+      "name": "Calculate Risk Level",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [800, 300],
+      "parameters": {
+        "functionCode": "// Calculate dropout risk based on student data\nconst student = items[0].json;\nconst daysSinceInquiry = Math.floor((Date.now() - new Date(student.createdAt).getTime()) / (1000 * 60 * 60 * 24));\nconst daysSinceLastActivity = Math.floor((Date.now() - new Date(student.lastActivity).getTime()) / (1000 * 60 * 60 * 24));\n\n// Risk calculation logic\nlet riskLevel = 'low';\nlet riskScore = 0;\n\n// Days since inquiry factor\nif (daysSinceInquiry > 7) riskScore += 3;\nelse if (daysSinceInquiry > 3) riskScore += 2;\nelse if (daysSinceInquiry > 1) riskScore += 1;\n\n// Days since last activity factor\nif (daysSinceLastActivity > 5) riskScore += 4;\nelse if (daysSinceLastActivity > 2) riskScore += 2;\nelse if (daysSinceLastActivity > 1) riskScore += 1;\n\n// Contact attempts factor\nif (student.contactAttempts > 2) riskScore += 2;\nelse if (student.contactAttempts > 0) riskScore += 1;\n\n// Determine risk level\nif (riskScore >= 6) riskLevel = 'high';\nelse if (riskScore >= 3) riskLevel = 'medium';\n\n// Determine action needed\nlet actionNeeded = 'none';\nif (riskLevel === 'high') {\n  actionNeeded = 'immediate_voice_call';\n} else if (riskLevel === 'medium') {\n  actionNeeded = 'whatsapp_follow_up';\n} else if (daysSinceLastActivity >= 1) {\n  actionNeeded = 'gentle_reminder';\n}\n\nreturn [{\n  json: {\n    ...student,\n    daysSinceInquiry,\n    daysSinceLastActivity,\n    riskLevel,\n    riskScore,\n    actionNeeded,\n    analysisTimestamp: new Date().toISOString()\n  }\n}];"
+      }
+    },
+    {
+      "id": "5",
+      "name": "Filter High Risk",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1000, 200],
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.riskLevel}}",
+              "operation": "equal",
+              "value2": "high"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "6",
+      "name": "Filter Medium Risk",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1000, 400],
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.riskLevel}}",
+              "operation": "equal",
+              "value2": "medium"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "7",
+      "name": "Trigger Voice Call",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1200, 100],
+      "parameters": {
+        "url": "={{$env.BASE_URL}}/api/webhook/n8n",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": {
+          "name": "Authorization",
+          "value": "Bearer {{$env.API_TOKEN}}"
+        },
+        "jsonParameters": true,
+        "body": {
+          "event": "voice_call_trigger",
+          "workflowId": "admission_dropout_monitor",
+          "data": {
+            "studentId": "={{$json.id}}",
+            "studentName": "={{$json.name}}",
+            "priority": "high",
+            "reason": "high_dropout_risk",
+            "riskScore": "={{$json.riskScore}}",
+            "daysSinceLastActivity": "={{$json.daysSinceLastActivity}}"
+          }
+        }
+      }
+    },
+    {
+      "id": "8",
+      "name": "Send WhatsApp Follow-up",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1200, 300],
+      "parameters": {
+        "url": "={{$env.BASE_URL}}/api/webhook/n8n",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": {
+          "name": "Authorization",
+          "value": "Bearer {{$env.API_TOKEN}}"
+        },
+        "jsonParameters": true,
+        "body": {
+          "event": "notification_send",
+          "workflowId": "admission_dropout_monitor",
+          "data": {
+            "studentId": "={{$json.id}}",
+            "studentName": "={{$json.name}}",
+            "notificationType": "followUp",
+            "channel": "whatsapp",
+            "priority": "medium",
+            "reason": "medium_dropout_risk"
+          }
+        }
+      }
+    },
+    {
+      "id": "9",
+      "name": "Update Student Risk Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1400, 200],
+      "parameters": {
+        "url": "={{$env.BASE_URL}}/api/students/={{$json.id}}",
+        "method": "PUT",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": {
+          "name": "Authorization",
+          "value": "Bearer {{$env.API_TOKEN}}"
+        },
+        "jsonParameters": true,
+        "body": {
+          "riskLevel": "={{$json.riskLevel}}",
+          "riskScore": "={{$json.riskScore}}",
+          "lastRiskAssessment": "={{$json.analysisTimestamp}}",
+          "actionTaken": "={{$json.actionNeeded}}",
+          "daysSinceLastActivity": "={{$json.daysSinceLastActivity}}"
+        }
+      }
+    },
+    {
+      "id": "10",
+      "name": "Log Activity",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1600, 300],
+      "parameters": {
+        "url": "={{$env.BASE_URL}}/api/admin/log",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": {
+          "name": "Authorization",
+          "value": "Bearer {{$env.API_TOKEN}}"
+        },
+        "jsonParameters": true,
+        "body": {
+          "type": "dropout_risk_assessment",
+          "studentId": "={{$json.id}}",
+          "riskLevel": "={{$json.riskLevel}}",
+          "actionTaken": "={{$json.actionNeeded}}",
+          "workflowId": "admission_dropout_monitor",
+          "timestamp": "={{$json.analysisTimestamp}}"
+        }
+      }
+    },
+    {
+      "id": "11",
+      "name": "Wait Before Next Batch",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [400, 500],
+      "parameters": {
+        "amount": 5,
+        "unit": "seconds"
+      }
+    },
+    {
+      "id": "12",
+      "name": "Error Handler",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [800, 500],
+      "onError": {
+        "continue": true
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request - Get Incomplete Applications",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request - Get Incomplete Applications": {
+      "main": [
+        [
+          {
+            "node": "Split Into Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Into Items": {
+      "main": [
+        [
+          {
+            "node": "Calculate Risk Level",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait Before Next Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Risk Level": {
+      "main": [
+        [
+          {
+            "node": "Filter High Risk",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Filter Medium Risk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter High Risk": {
+      "main": [
+        [
+          {
+            "node": "Trigger Voice Call",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Medium Risk": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp Follow-up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger Voice Call": {
+      "main": [
+        [
+          {
+            "node": "Update Student Risk Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send WhatsApp Follow-up": {
+      "main": [
+        [
+          {
+            "node": "Update Student Risk Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Student Risk Status": {
+      "main": [
+        [
+          {
+            "node": "Log Activity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": true,
+    "saveDataSuccessExecution": "all",
+    "saveDataErrorExecution": "all",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "error_handler_workflow"
+  },
+  "tags": [
+    {
+      "createdAt": "2024-01-15T10:00:00.000Z",
+      "updatedAt": "2024-01-15T10:00:00.000Z",
+      "id": "1",
+      "name": "edunudge"
+    },
+    {
+      "createdAt": "2024-01-15T10:00:00.000Z",
+      "updatedAt": "2024-01-15T10:00:00.000Z",
+      "id": "2",
+      "name": "dropout-prevention"
+    }
+  ],
+  "meta": {
+    "instanceId": "n8n-edunudge-instance"
+  },
+  "id": "admission_dropout_monitor",
+  "versionId": "1",
+  "createdAt": "2024-01-15T10:00:00.000Z",
+  "updatedAt": "2024-01-15T10:00:00.000Z"
+}
