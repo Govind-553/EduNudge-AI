@@ -187,28 +187,11 @@ docker run -p 3000:3000 edunudge-ai
 4. Add tests
 5. Submit a pull request
 
-## 📚 Documentation
-
-- [API Documentation](docs/API.md)
-- [Deployment Guide](docs/DEPLOYMENT.md)
-- [Configuration Reference](docs/CONFIGURATION.md)
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🆘 Support
-
-For support and questions:
-- Create an issue in the repository
-- Email: support@edunudge-ai.com
-- Documentation: [docs.edunudge-ai.com](https://docs.edunudge-ai.com)
-
 ## 🌟 Key Technologies
 
 - **Backend**: Node.js, Express.js, Firebase
 - **Frontend**: React.js, CSS3
-- **AI/ML**: OpenAI GPT-4, Retell AI
+- **AI/ML**: OpenAI GPT-3.5, Retell AI
 - **Automation**: n8n workflows
 - **Communication**: WhatsApp Business API
 - **Analytics**: Firebase Analytics, Custom dashboards
