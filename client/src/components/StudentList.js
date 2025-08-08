@@ -1,6 +1,7 @@
 // client/src/components/StudentList.js
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import './StudentList.css';
 
 const StudentList = ({ onStudentSelect, filters = {} }) => {
   const [students, setStudents] = useState([]);

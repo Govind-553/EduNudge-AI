@@ -1,6 +1,7 @@
 // client/src/components/Analytics.js
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import './Analytics.css'; 
 
 const Analytics = ({ dateRange = '7' }) => {
   const [analytics, setAnalytics] = useState({});

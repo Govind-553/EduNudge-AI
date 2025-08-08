@@ -1,6 +1,7 @@
 // client/src/components/CallHistory.js
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import './CallHistory.css'; 
 
 const CallHistory = ({ studentId = null, limit = 50 }) => {
   const [calls, setCalls] = useState([]);
