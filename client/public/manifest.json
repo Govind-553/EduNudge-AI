@@ -1,6 +1,6 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "EduNudge AI",
+  "name": "EduNudge AI - Admission Dropout Prevention System",
   "icons": [
     {
       "src": "favicon.ico",
@@ -8,18 +8,57 @@
       "type": "image/x-icon"
     },
     {
-      "src": "logo192.png",
+      "src": "",
       "type": "image/png",
       "sizes": "192x192"
     },
     {
-      "src": "logo512.png",
+      "src": "",
       "type": "image/png",
       "sizes": "512x512"
     }
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#ffffff"
+  "theme_color": "#3b82f6",
+  "background_color": "#f8fafc",
+  "description": "An intelligent voice-powered system that proactively prevents student dropouts during the admission process using real-time conversational AI and automation workflows.",
+  "categories": ["education", "productivity", "business"],
+  "lang": "en",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "screenshots": [
+    {
+      "src": "screenshot-wide.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "EduNudge AI Dashboard - Desktop View"
+    },
+    {
+      "src": "screenshot-narrow.png", 
+      "sizes": "640x1136",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "EduNudge AI Dashboard - Mobile View"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "View the main dashboard with student analytics",
+      "url": "/dashboard",
+      "icons": [{ "src": "icon-dashboard.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Students",
+      "short_name": "Students", 
+      "description": "Manage students and their application status",
+      "url": "/students",
+      "icons": [{ "src": "icon-students.png", "sizes": "96x96" }]
+    }
+  ],
+  "related_applications": [],
+  "prefer_related_applications": false
 }

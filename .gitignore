@@ -2,7 +2,9 @@
 client/node_modules
 /.pnp
 .pnp.js
-.env  # environment variables
+
+# environment variables
+.env      
 
 # testing
 /coverage

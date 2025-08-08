@@ -1,0 +1,442 @@
+{
+  "name": "EduNudge - Counselor Escalation",
+  "nodes": [
+    {
+      "id": "1",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [200, 300],
+      "webhookId": "counselor-escalation",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "counselor-escalation",
+        "responseMode": "responseNode"
+      }
+    },
+    {
+      "id": "2",
+      "name": "Process Escalation Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [400, 300],
+      "parameters": {
+        "functionCode": "const webhookData = items[0].json;\nconst { event, data } = webhookData;\n\nif (event !== 'counselor_escalation') {\n  throw new Error('Invalid event type');\n}\n\nconst {\n  studentId,\n  reason,\n  urgency = 'medium',\n  callId,\n  analysisData,\n  escalatedBy = 'system'\n} = data;\n\n// Validate required fields\nif (!studentId || !reason) {\n  throw new Error('Missing required escalation data');\n}\n\n// Determine escalation priority\nlet priority = 'medium';\nif (urgency === 'high' || reason.includes('emergency') || reason.includes('urgent')) {\n  priority = 'high';\n} else if (urgency === 'low') {\n  priority = 'low';\n}\n\n// Set escalation type based on reason\nlet escalationType = 'general';\nif (reason.includes('financial')) escalationType = 'financial_aid';\nelse if (reason.includes('academic')) escalationType = 'academic_advisor';\nelse if (reason.includes('emotional') || reason.includes('distressed')) escalationType = 'counselor_urgent';\nelse if (reason.includes('technical')) escalationType = 'technical_support';\n\nreturn [{\n  json: {\n    studentId,\n    reason,\n    urgency,\n    priority,\n    escalationType,\n    callId,\n    analysisData,\n    escalatedBy,\n    escalatedAt: new Date().toISOString(),\n    status: 'pending_assignment',\n    processedBy: 'n8n-counselor-escalation'\n  }\n}];"
+      }
+    },
+    {
+      "id": "3",
+      "name": "Get Student Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [600, 300],
+      "parameters": {
+        "url": "={{$env.BASE_URL}}/api/students/={{$json.studentId}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": {
+          "name": "Authorization",
+          "value": "Bearer {{$env.API_TOKEN}}"
+        }
+      }
+    },
+    {
+      "id": "4",
+      "name": "Generate Counselor Briefing",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [800, 300],
+      "parameters": {
+        "url": "={{$env.BASE_URL}}/api/ai/generate-briefing",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": {
+          "name": "Authorization",
+          "value": "Bearer {{$env.API_TOKEN}}"
+        },
+        "jsonParameters": true,
+        "body": {
+          "studentId": "={{$json.studentId}}",
+          "student": "={{$('Get Student Details').item.json.student}}",
+          "escalationReason": "={{$json.reason}}",
+          "callAnalysis": "={{$json.analysisData}}",
+          "urgency": "={{$json.urgency}}"
+        }
+      }
+    },
+    {
+      "id": "5",
+      "name": "Route by Priority",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [1000, 300],
+      "parameters": {
+        "rules": {
+          "rules": [
+            {
+              "conditions": {
+                "string": [
+                  {
+                    "value1": "={{$json.priority}}",
+                    "operation": "equal",
+                    "value2": "high"
+                  }
+                ]
+              },
+              "renameOutput": "High Priority"
+            },
+            {
+              "conditions": {
+                "string": [
+                  {
+                    "value1": "={{$json.priority}}",
+                    "operation": "equal",
+                    "value2": "medium"
+                  }
+                ]
+              },
+              "renameOutput": "Medium Priority"
+            },
+            {
+              "conditions": {
+                "string": [
+                  {
+                    "value1": "={{$json.priority}}",
+                    "operation": "equal",
+                    "value2": "low"
+                  }
+                ]
+              },
+              "renameOutput": "Low Priority"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "6",
+      "name": "Send Urgent Alert - Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [1200, 150],
+      "parameters": {
+        "channel": "#admissions-urgent",
+        "text": "🚨 URGENT: Student Escalation Required\n\n**Student:** {{$('Get Student Details').item.json.student.name}}\n**Phone:** {{$('Get Student Details').item.json.student.phone}}\n**Program:** {{$('Get Student Details').item.json.student.inquiryType}}\n\n**Escalation Reason:** {{$('Process Escalation Data').item.json.reason}}\n**Urgency:** {{$('Process Escalation Data').item.json.urgency}}\n\n**AI Briefing:** \n{{$('Generate Counselor Briefing').item.json.briefing}}\n\nPlease assign a counselor immediately. Student ID: {{$('Process Escalation Data').item.json.studentId}}",
+        "otherOptions": {
+          "mrkdwn": true
+        }
+      }
+    },
+    {
+      "id": "7",
+      "name": "Send Email to Lead Counselor",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [1200, 250],
+      "parameters": {
+        "fromEmail": "{{$env.EMAIL_FROM}}",
+        "toEmail": "{{$env.LEAD_COUNSELOR_EMAIL}}",
+        "subject": "Student Escalation: {{$('Get Student Details').item.json.student.name}} - {{$('Process Escalation Data').item.json.priority}} Priority",
+        "text": "A student has been escalated and requires immediate attention.\n\nStudent Information:\n- Name: {{$('Get Student Details').item.json.student.name}}\n- Phone: {{$('Get Student Details').item.json.student.phone}}\n- Email: {{$('Get Student Details').item.json.student.email}}\n- Program: {{$('Get Student Details').item.json.student.inquiryType}}\n- Status: {{$('Get Student Details').item.json.student.status}}\n\nEscalation Details:\n- Reason: {{$('Process Escalation Data').item.json.reason}}\n- Priority: {{$('Process Escalation Data').item.json.priority}}\n- Escalated By: {{$('Process Escalation Data').item.json.escalatedBy}}\n- Escalated At: {{$('Process Escalation Data').item.json.escalatedAt}}\n\nCounselor Briefing:\n{{$('Generate Counselor Briefing').item.json.briefing}}\n\nPlease log into the dashboard to assign this case to an appropriate counselor.\n\nDashboard: {{$env.BASE_URL}}/dashboard\nDirect Link: {{$env.BASE_URL}}/students/{{$('Process Escalation Data').item.json.studentId}}",
+        "options": {}
+      }
+    },
+    {
+      "id": "8",
+      "name": "Add to Queue - Medium",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1200, 350],
+      "parameters": {
+        "url": "{{$env.BASE_URL}}/api/admin/counselor-queue",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": {
+          "name": "Authorization",
+          "value": "Bearer {{$env.API_TOKEN}}"
+        },
+        "jsonParameters": true,
+        "body": {
+          "studentId": "={{$('Process Escalation Data').item.json.studentId}}",
+          "priority": "medium",
+          "escalationType": "={{$('Process Escalation Data').item.json.escalationType}}",
+          "reason": "={{$('Process Escalation Data').item.json.reason}}",
+          "briefing": "={{$('Generate Counselor Briefing').item.json.briefing}}",
+          "assignedAt": "={{$('Process Escalation Data').item.json.escalatedAt}}"
+        }
+      }
+    },
+    {
+      "id": "9",
+      "name": "Add to Queue - Low",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1200, 450],
+      "parameters": {
+        "url": "{{$env.BASE_URL}}/api/admin/counselor-queue",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": {
+          "name": "Authorization",
+          "value": "Bearer {{$env.API_TOKEN}}"
+        },
+        "jsonParameters": true,
+        "body": {
+          "studentId": "={{$('Process Escalation Data').item.json.studentId}}",
+          "priority": "low",
+          "escalationType": "={{$('Process Escalation Data').item.json.escalationType}}",
+          "reason": "={{$('Process Escalation Data').item.json.reason}}",
+          "briefing": "={{$('Generate Counselor Briefing').item.json.briefing}}",
+          "assignedAt": "={{$('Process Escalation Data').item.json.escalatedAt}}"
+        }
+      }
+    },
+    {
+      "id": "10",
+      "name": "Update Student Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1400, 300],
+      "parameters": {
+        "url": "={{$env.BASE_URL}}/api/students/={{$('Process Escalation Data').item.json.studentId}}",
+        "method": "PUT",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": {
+          "name": "Authorization",
+          "value": "Bearer {{$env.API_TOKEN}}"
+        },
+        "jsonParameters": true,
+        "body": {
+          "status": "counselor_required",
+          "escalationReason": "={{$('Process Escalation Data').item.json.reason}}",
+          "escalatedAt": "={{$('Process Escalation Data').item.json.escalatedAt}}",
+          "escalationPriority": "={{$('Process Escalation Data').item.json.priority}}",
+          "counselorBriefing": "={{$('Generate Counselor Briefing').item.json.briefing}}",
+          "lastActivity": "={{$('Process Escalation Data').item.json.escalatedAt}}"
+        }
+      }
+    },
+    {
+      "id": "11",
+      "name": "Send Student Acknowledgment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1600, 300],
+      "parameters": {
+        "url": "{{$env.BASE_URL}}/api/notifications/whatsapp/send",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": {
+          "name": "Authorization",
+          "value": "Bearer {{$env.API_TOKEN}}"
+        },
+        "jsonParameters": true,
+        "body": {
+          "to": "={{$('Get Student Details').item.json.student.phone}}",
+          "templateType": "custom",
+          "customMessage": "Hi {{$('Get Student Details').item.json.student.name}}! We've received your inquiry and one of our counselors will be in touch with you soon to provide personalized assistance. Thank you for your patience. For urgent matters, please call us at {{$env.CONTACT_PHONE}}."
+        }
+      }
+    },
+    {
+      "id": "12",
+      "name": "Log Escalation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1800, 300],
+      "parameters": {
+        "url": "{{$env.BASE_URL}}/api/admin/log",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": {
+          "name": "Authorization",
+          "value": "Bearer {{$env.API_TOKEN}}"
+        },
+        "jsonParameters": true,
+        "body": {
+          "type": "counselor_escalation_processed",
+          "studentId": "={{$('Process Escalation Data').item.json.studentId}}",
+          "escalationReason": "={{$('Process Escalation Data').item.json.reason}}",
+          "priority": "={{$('Process Escalation Data').item.json.priority}}",
+          "escalationType": "={{$('Process Escalation Data').item.json.escalationType}}",
+          "workflowId": "counselor-escalation",
+          "timestamp": "={{$('Process Escalation Data').item.json.escalatedAt}}"
+        }
+      }
+    },
+    {
+      "id": "13",
+      "name": "Response",
+      "type": "n8n-nodes-base.respond",
+      "typeVersion": 1,
+      "position": [2000, 300],
+      "parameters": {
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Process Escalation Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Escalation Data": {
+      "main": [
+        [
+          {
+            "node": "Get Student Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Student Details": {
+      "main": [
+        [
+          {
+            "node": "Generate Counselor Briefing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Counselor Briefing": {
+      "main": [
+        [
+          {
+            "node": "Route by Priority",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Priority": {
+      "main": [
+        [
+          {
+            "node": "Send Urgent Alert - Slack",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Email to Lead Counselor",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Add to Queue - Low",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Urgent Alert - Slack": {
+      "main": [
+        [
+          {
+            "node": "Update Student Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email to Lead Counselor": {
+      "main": [
+        [
+          {
+            "node": "Add to Queue - Medium",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add to Queue - Medium": {
+      "main": [
+        [
+          {
+            "node": "Update Student Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add to Queue - Low": {
+      "main": [
+        [
+          {
+            "node": "Update Student Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Student Status": {
+      "main": [
+        [
+          {
+            "node": "Send Student Acknowledgment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Student Acknowledgment": {
+      "main": [
+        [
+          {
+            "node": "Log Escalation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Escalation": {
+      "main": [
+        [
+          {
+            "node": "Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {},
+  "tags": [
+    {
+      "name": "edunudge"
+    },
+    {
+      "name": "escalation"
+    }
+  ]
+}

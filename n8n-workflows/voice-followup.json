@@ -1,0 +1,358 @@
+{
+  "name": "EduNudge - Voice Follow-up",
+  "nodes": [
+    {
+      "id": "1",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [200, 300],
+      "webhookId": "voice-followup",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "voice-followup",
+        "responseMode": "responseNode"
+      }
+    },
+    {
+      "id": "2",
+      "name": "Process Voice Call Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [400, 300],
+      "parameters": {
+        "functionCode": "const webhookData = items[0].json;\nconst { event, data } = webhookData;\n\nif (event !== 'voice_call_trigger') {\n  throw new Error('Invalid event type');\n}\n\nconst {\n  studentId,\n  studentName,\n  studentPhone,\n  priority = 'medium',\n  reason = 'follow_up',\n  inquiryType = 'general',\n  applicationStatus = 'inquiry_submitted'\n} = data;\n\n// Validate required fields\nif (!studentId || !studentName || !studentPhone) {\n  throw new Error('Missing required student information');\n}\n\n// Format phone number\nlet formattedPhone = studentPhone.replace(/[^\\d+]/g, '');\nif (!formattedPhone.startsWith('+')) {\n  if (formattedPhone.length === 10) {\n    formattedPhone = '+1' + formattedPhone;\n  } else if (formattedPhone.length === 11 && formattedPhone.startsWith('1')) {\n    formattedPhone = '+' + formattedPhone;\n  }\n}\n\nreturn [{\n  json: {\n    studentId,\n    studentName,\n    studentPhone: formattedPhone,\n    priority,\n    reason,\n    inquiryType,\n    applicationStatus,\n    timestamp: new Date().toISOString(),\n    callType: 'outbound_follow_up',\n    processedBy: 'n8n-voice-followup'\n  }\n}];"
+      }
+    },
+    {
+      "id": "3",
+      "name": "Get Student Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [600, 300],
+      "parameters": {
+        "url": "={{$env.BASE_URL}}/api/students/={{$json.studentId}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": {
+          "name": "Authorization",
+          "value": "Bearer {{$env.API_TOKEN}}"
+        }
+      }
+    },
+    {
+      "id": "4",
+      "name": "Create Retell Voice Call",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [800, 300],
+      "parameters": {
+        "url": "={{$env.BASE_URL}}/api/voice/create-call",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": {
+          "name": "Authorization",
+          "value": "Bearer {{$env.API_TOKEN}}"
+        },
+        "jsonParameters": true,
+        "body": {
+          "studentId": "={{$json.studentId}}",
+          "toNumber": "={{$json.studentPhone}}",
+          "studentName": "={{$json.studentName}}",
+          "inquiryType": "={{$json.inquiryType}}",
+          "applicationStatus": "={{$json.applicationStatus}}",
+          "priority": "={{$json.priority}}",
+          "reason": "={{$json.reason}}",
+          "callType": "automated_followup"
+        }
+      }
+    },
+    {
+      "id": "5",
+      "name": "Check Call Success",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1000, 300],
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.status}}",
+              "operation": "equal",
+              "value2": "success"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "6",
+      "name": "Update Student - Call Initiated",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1200, 250],
+      "parameters": {
+        "url": "={{$env.BASE_URL}}/api/students/={{$('Process Voice Call Data').item.json.studentId}}",
+        "method": "PUT",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": {
+          "name": "Authorization",
+          "value": "Bearer {{$env.API_TOKEN}}"
+        },
+        "jsonParameters": true,
+        "body": {
+          "lastCallInitiated": "={{$('Process Voice Call Data').item.json.timestamp}}",
+          "lastCallReason": "={{$('Process Voice Call Data').item.json.reason}}",
+          "lastCallPriority": "={{$('Process Voice Call Data').item.json.priority}}",
+          "contactAttempts": "={{$('Get Student Details').item.json.student.contactAttempts + 1}}"
+        }
+      }
+    },
+    {
+      "id": "7",
+      "name": "Handle Call Failure",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1200, 350],
+      "parameters": {
+        "url": "={{$env.BASE_URL}}/api/admin/log",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": {
+          "name": "Authorization",
+          "value": "Bearer {{$env.API_TOKEN}}"
+        },
+        "jsonParameters": true,
+        "body": {
+          "type": "voice_call_failed",
+          "studentId": "={{$('Process Voice Call Data').item.json.studentId}}",
+          "reason": "={{$json.error || 'Unknown error'}}",
+          "workflowId": "voice-followup",
+          "timestamp": "={{$('Process Voice Call Data').item.json.timestamp}}"
+        }
+      }
+    },
+    {
+      "id": "8",
+      "name": "Schedule Retry",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1400, 350],
+      "parameters": {
+        "url": "={{$env.BASE_URL}}/api/webhook/n8n",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": {
+          "name": "Authorization",
+          "value": "Bearer {{$env.API_TOKEN}}"
+        },
+        "jsonParameters": true,
+        "body": {
+          "event": "schedule_retry",
+          "data": {
+            "studentId": "={{$('Process Voice Call Data').item.json.studentId}}",
+            "retryType": "voice_call",
+            "retryAfter": "4 hours",
+            "originalReason": "={{$('Process Voice Call Data').item.json.reason}}",
+            "failureReason": "={{$('Create Retell Voice Call').item.json.error}}"
+          }
+        }
+      }
+    },
+    {
+      "id": "9",
+      "name": "Log Successful Call",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1400, 250],
+      "parameters": {
+        "url": "={{$env.BASE_URL}}/api/admin/log",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": {
+          "name": "Authorization",
+          "value": "Bearer {{$env.API_TOKEN}}"
+        },
+        "jsonParameters": true,
+        "body": {
+          "type": "voice_call_initiated",
+          "studentId": "={{$('Process Voice Call Data').item.json.studentId}}",
+          "callId": "={{$('Create Retell Voice Call').item.json.call.id}}",
+          "priority": "={{$('Process Voice Call Data').item.json.priority}}",
+          "reason": "={{$('Process Voice Call Data').item.json.reason}}",
+          "workflowId": "voice-followup",
+          "timestamp": "={{$('Process Voice Call Data').item.json.timestamp}}"
+        }
+      }
+    },
+    {
+      "id": "10",
+      "name": "Wait for Call Completion",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [1600, 250],
+      "parameters": {
+        "amount": 5,
+        "unit": "minutes",
+        "resume": "webhook",
+        "options": {
+          "webhookSuffix": "call-completed"
+        }
+      }
+    },
+    {
+      "id": "11",
+      "name": "Process Call Results",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1800, 250],
+      "parameters": {
+        "functionCode": "// Process call completion data\nconst callData = items[0].json;\nconst originalData = $('Process Voice Call Data').item.json;\n\n// Extract call results\nconst callStatus = callData.call_status || 'unknown';\nconst callDuration = callData.call_duration || 0;\nconst callAnalysis = callData.analysis || {};\n\n// Determine next actions based on call results\nlet nextActions = [];\nlet followUpNeeded = false;\n\nswitch (callStatus) {\n  case 'completed':\n    if (callDuration > 30) { // Call lasted more than 30 seconds\n      nextActions.push('positive_engagement');\n      if (callAnalysis.needs_support) {\n        nextActions.push('counselor_escalation');\n        followUpNeeded = true;\n      }\n    } else {\n      nextActions.push('brief_interaction');\n      followUpNeeded = true;\n    }\n    break;\n    \n  case 'no_answer':\n    nextActions.push('schedule_retry');\n    nextActions.push('whatsapp_followup');\n    followUpNeeded = true;\n    break;\n    \n  case 'failed':\n    nextActions.push('technical_retry');\n    followUpNeeded = true;\n    break;\n    \n  default:\n    nextActions.push('manual_review');\n    followUpNeeded = true;\n}\n\nreturn [{\n  json: {\n    ...originalData,\n    callStatus,\n    callDuration,\n    callAnalysis,\n    nextActions,\n    followUpNeeded,\n    processedAt: new Date().toISOString()\n  }\n}];"
+      }
+    },
+    {
+      "id": "12",
+      "name": "Response",
+      "type": "n8n-nodes-base.respond",
+      "typeVersion": 1,
+      "position": [2000, 300],
+      "parameters": {
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Process Voice Call Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Voice Call Data": {
+      "main": [
+        [
+          {
+            "node": "Get Student Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Student Details": {
+      "main": [
+        [
+          {
+            "node": "Create Retell Voice Call",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Retell Voice Call": {
+      "main": [
+        [
+          {
+            "node": "Check Call Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Call Success": {
+      "main": [
+        [
+          {
+            "node": "Update Student - Call Initiated",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Handle Call Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Student - Call Initiated": {
+      "main": [
+        [
+          {
+            "node": "Log Successful Call",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handle Call Failure": {
+      "main": [
+        [
+          {
+            "node": "Schedule Retry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Successful Call": {
+      "main": [
+        [
+          {
+            "node": "Wait for Call Completion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for Call Completion": {
+      "main": [
+        [
+          {
+            "node": "Process Call Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Call Results": {
+      "main": [
+        [
+          {
+            "node": "Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {},
+  "tags": [
+    {
+      "name": "edunudge"
+    },
+    {
+      "name": "voice"
+    }
+  ]
+}

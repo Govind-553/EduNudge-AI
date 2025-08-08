@@ -1,0 +1,280 @@
+{
+  "name": "EduNudge - Notification Sender",
+  "nodes": [
+    {
+      "id": "1",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [200, 300],
+      "webhookId": "notification-sender",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "notification-sender",
+        "responseMode": "responseNode"
+      }
+    },
+    {
+      "id": "2",
+      "name": "Process Notification Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [400, 300],
+      "parameters": {
+        "functionCode": "const webhookData = items[0].json;\nconst { event, data } = webhookData;\n\nif (event !== 'notification_send') {\n  throw new Error('Invalid event type');\n}\n\nconst {\n  studentId,\n  studentName,\n  studentPhone,\n  notificationType,\n  customMessage,\n  channel,\n  urgency = 'normal'\n} = data;\n\nreturn [{\n  json: {\n    studentId,\n    studentName,\n    studentPhone: studentPhone.replace(/[^\\d+]/g, ''),\n    notificationType,\n    customMessage,\n    channel: channel || 'whatsapp',\n    urgency,\n    timestamp: new Date().toISOString(),\n    processedBy: 'n8n-notification-sender'\n  }\n}];"
+      }
+    },
+    {
+      "id": "3",
+      "name": "Route by Channel",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [600, 300],
+      "parameters": {
+        "rules": {
+          "rules": [
+            {
+              "conditions": {
+                "string": [
+                  {
+                    "value1": "={{$json.channel}}",
+                    "operation": "equal",
+                    "value2": "whatsapp"
+                  }
+                ]
+              },
+              "renameOutput": "WhatsApp"
+            },
+            {
+              "conditions": {
+                "string": [
+                  {
+                    "value1": "={{$json.channel}}",
+                    "operation": "equal",
+                    "value2": "email"
+                  }
+                ]
+              },
+              "renameOutput": "Email"
+            },
+            {
+              "conditions": {
+                "string": [
+                  {
+                    "value1": "={{$json.channel}}",
+                    "operation": "equal",
+                    "value2": "sms"
+                  }
+                ]
+              },
+              "renameOutput": "SMS"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "4",
+      "name": "Send WhatsApp Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [800, 200],
+      "parameters": {
+        "url": "={{$env.BASE_URL}}/api/notifications/whatsapp/send",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": {
+          "name": "Authorization",
+          "value": "Bearer {{$env.API_TOKEN}}"
+        },
+        "jsonParameters": true,
+        "body": {
+          "to": "={{$json.studentPhone}}",
+          "templateType": "={{$json.notificationType}}",
+          "variables": {
+            "student_name": "={{$json.studentName}}",
+            "program_name": "General Program"
+          },
+          "customMessage": "={{$json.customMessage}}"
+        }
+      }
+    },
+    {
+      "id": "5",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [800, 300],
+      "parameters": {
+        "fromEmail": "={{$env.EMAIL_FROM}}",
+        "toEmail": "={{$json.studentEmail}}",
+        "subject": "Follow-up from {{$env.INSTITUTION_NAME}}",
+        "text": "={{$json.customMessage || 'Thank you for your interest in our programs. We're here to help with any questions you may have.'}}",
+        "options": {}
+      }
+    },
+    {
+      "id": "6",
+      "name": "Send SMS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [800, 400],
+      "parameters": {
+        "url": "={{$env.BASE_URL}}/api/notifications/sms/send",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": {
+          "name": "Authorization",
+          "value": "Bearer {{$env.API_TOKEN}}"
+        },
+        "jsonParameters": true,
+        "body": {
+          "to": "={{$json.studentPhone}}",
+          "message": "={{$json.customMessage || 'Hello from ' + $env.INSTITUTION_NAME + '! We wanted to follow up on your inquiry. Please call us at ' + $env.CONTACT_PHONE + ' if you have any questions.'}}"
+        }
+      }
+    },
+    {
+      "id": "7",
+      "name": "Log Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1000, 300],
+      "parameters": {
+        "url": "={{$env.BASE_URL}}/api/admin/log",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": {
+          "name": "Authorization",
+          "value": "Bearer {{$env.API_TOKEN}}"
+        },
+        "jsonParameters": true,
+        "body": {
+          "type": "notification_sent",
+          "studentId": "={{$json.studentId}}",
+          "channel": "={{$json.channel}}",
+          "notificationType": "={{$json.notificationType}}",
+          "status": "sent",
+          "workflowId": "notification-sender",
+          "timestamp": "={{$json.timestamp}}"
+        }
+      }
+    },
+    {
+      "id": "8",
+      "name": "Response",
+      "type": "n8n-nodes-base.respond",
+      "typeVersion": 1,
+      "position": [1200, 300],
+      "parameters": {
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Process Notification Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Notification Data": {
+      "main": [
+        [
+          {
+            "node": "Route by Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Channel": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send SMS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send WhatsApp Message": {
+      "main": [
+        [
+          {
+            "node": "Log Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email": {
+      "main": [
+        [
+          {
+            "node": "Log Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send SMS": {
+      "main": [
+        [
+          {
+            "node": "Log Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Notification": {
+      "main": [
+        [
+          {
+            "node": "Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {},
+  "tags": [
+    {
+      "name": "edunudge"
+    },
+    {
+      "name": "notifications"
+    }
+  ]
+}
