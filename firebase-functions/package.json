@@ -1,0 +1,163 @@
+{
+  "name": "edunudge-ai-firebase-functions",
+  "version": "1.0.0",
+  "description": "Firebase Cloud Functions for EduNudge AI - Automated student engagement and notification system",
+  "main": "index.js",
+  "scripts": {
+    "build": "npm run clean && npm run compile",
+    "clean": "rimraf lib",
+    "compile": "tsc",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "shell": "npm run build && firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "deploy:notification": "firebase deploy --only functions:scheduledNotificationSender,functions:onStudentStatusChange,functions:onNewStudent,functions:sendManualNotification,functions:retryFailedNotifications",
+    "logs": "firebase functions:log",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "lint": "eslint src/**/*.js",
+    "lint:fix": "eslint src/**/*.js --fix"
+  },
+  "keywords": [
+    "firebase",
+    "cloud-functions",
+    "education",
+    "student-engagement",
+    "notifications",
+    "ai-automation",
+    "edtech",
+    "dropout-prevention"
+  ],
+  "author": "EduNudge AI Team",
+  "license": "MIT",
+  "dependencies": {
+    "firebase-admin": "^12.0.0",
+    "firebase-functions": "^4.8.0",
+    "axios": "^1.6.0",
+    "winston": "^3.11.0",
+    "moment": "^2.29.4",
+    "moment-timezone": "^0.5.43",
+    "lodash": "^4.17.21",
+    "uuid": "^9.0.1",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "body-parser": "^1.20.2",
+    "helmet": "^7.1.0",
+    "rate-limiter-flexible": "^3.0.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.0",
+    "eslint": "^8.55.0",
+    "eslint-config-google": "^0.14.0",
+    "firebase-functions-test": "^3.1.0",
+    "jest": "^29.7.0",
+    "rimraf": "^5.0.5",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "prettier": "^3.1.0"
+  },
+  "engines": {
+    "node": "18"
+  },
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Govind-553/EduNudge-AI.git",
+    "directory": "firebase-functions"
+  },
+  "bugs": {
+    "url": "https://github.com/Govind-553/EduNudge-AI/issues"
+  },
+  "homepage": "https://github.com/Govind-553/EduNudge-AI#readme",
+  "config": {
+    "firebase": {
+      "region": "us-central1",
+      "runtime": "nodejs18",
+      "memory": "256MB",
+      "timeout": "60s"
+    }
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/test/**/*.test.js",
+      "**/tests/**/*.test.js"
+    ],
+    "collectCoverageFrom": [
+      "**/*.js",
+      "!node_modules/**",
+      "!test/**",
+      "!tests/**"
+    ],
+    "coverageReporters": [
+      "text",
+      "lcov",
+      "html"
+    ]
+  },
+  "eslintConfig": {
+    "parserOptions": {
+      "ecmaVersion": 2018,
+      "sourceType": "module"
+    },
+    "extends": [
+      "eslint:recommended",
+      "google"
+    ],
+    "rules": {
+      "no-restricted-globals": [
+        "error",
+        "name",
+        "length"
+      ],
+      "prefer-arrow-callback": "error",
+      "quotes": [
+        "error",
+        "single"
+      ],
+      "max-len": [
+        "error",
+        {
+          "code": 120
+        }
+      ],
+      "comma-dangle": [
+        "error",
+        "never"
+      ],
+      "no-console": "warn",
+      "no-unused-vars": [
+        "error",
+        {
+          "argsIgnorePattern": "^_"
+        }
+      ]
+    },
+    "globals": {
+      "console": "readonly"
+    },
+    "env": {
+      "node": true,
+      "es6": true
+    }
+  },
+  "funding": {
+    "type": "individual",
+    "url": "https://github.com/Govind-553/EduNudge-AI"
+  },
+  "peerDependencies": {
+    "firebase": "^10.7.0"
+  },
+  "optionalDependencies": {
+    "sharp": "^0.33.0",
+    "canvas": "^2.11.2"
+  },
+  "browserslist": [
+    "node 18"
+  ],
+  "volta": {
+    "node": "18.18.2",
+    "npm": "10.2.0"
+  }
+}
