@@ -1,5 +1,4 @@
 // server/config/retell.js
-const { Retell } = require('retell-sdk');
 const winston = require('winston');
 
 // Configure logger for this module
@@ -35,6 +34,10 @@ async function initializeRetell() {
     if (!process.env.RETELL_API_KEY) {
       throw new Error('RETELL_API_KEY environment variable is required');
     }
+
+    // Use dynamic import to handle module compatibility
+    const retellModule = await import('retell-sdk');
+    const Retell = retellModule.default || retellModule;
 
     // Initialize Retell client
     retellClient = new Retell({
@@ -146,10 +149,10 @@ async function createEmotionAwareAgent(agentConfig) {
         {
           name: 'initial_engagement',
           state_prompt: `You are starting a friendly conversation with a prospective student. 
-                        Be warm, empathetic, and understanding. Listen for emotional cues in their voice.
-                        If they sound confused, provide clear explanations.
-                        If they sound hesitant, offer reassurance and support.
-                        If they sound frustrated, acknowledge their feelings and offer help.`,
+                         Be warm, empathetic, and understanding. Listen for emotional cues in their voice.
+                         If they sound confused, provide clear explanations.
+                         If they sound hesitant, offer reassurance and support.
+                         If they sound frustrated, acknowledge their feelings and offer help.`,
           edges: [
             {
               destination_state_name: 'information_gathering',
@@ -164,8 +167,8 @@ async function createEmotionAwareAgent(agentConfig) {
         {
           name: 'information_gathering',
           state_prompt: `Gather information about their application status and any obstacles they're facing.
-                        Be patient and understanding. Ask open-ended questions to understand their situation better.
-                        Listen for emotional indicators - stress, confusion, excitement, or concerns.`,
+                         Be patient and understanding. Ask open-ended questions to understand their situation better.
+                         Listen for emotional indicators - stress, confusion, excitement, or concerns.`,
           edges: [
             {
               destination_state_name: 'concern_addressing',
@@ -180,9 +183,9 @@ async function createEmotionAwareAgent(agentConfig) {
         {
           name: 'concern_addressing',
           state_prompt: `Address the student's concerns with empathy and understanding.
-                        Provide reassurance and practical solutions.
-                        If you detect frustration or stress in their voice, acknowledge these feelings.
-                        Offer specific help and resources.`,
+                         Provide reassurance and practical solutions.
+                         If you detect frustration or stress in their voice, acknowledge these feelings.
+                         Offer specific help and resources.`,
           edges: [
             {
               destination_state_name: 'guidance_providing',
@@ -197,8 +200,8 @@ async function createEmotionAwareAgent(agentConfig) {
         {
           name: 'guidance_providing',
           state_prompt: `Provide clear, actionable guidance for their next steps.
-                        Be encouraging and supportive. Offer specific resources and assistance.
-                        Ensure they understand what they need to do and feel confident about moving forward.`,
+                         Be encouraging and supportive. Offer specific resources and assistance.
+                         Ensure they understand what they need to do and feel confident about moving forward.`,
           edges: [
             {
               destination_state_name: 'follow_up_scheduling',
@@ -209,8 +212,8 @@ async function createEmotionAwareAgent(agentConfig) {
         {
           name: 'escalation',
           state_prompt: `Prepare to transfer the call to a human counselor.
-                        Explain why the transfer is happening and what to expect.
-                        Reassure the student that they will receive personalized help.`,
+                         Explain why the transfer is happening and what to expect.
+                         Reassure the student that they will receive personalized help.`,
           tools: [
             {
               type: 'transfer_call',
@@ -222,8 +225,8 @@ async function createEmotionAwareAgent(agentConfig) {
         {
           name: 'follow_up_scheduling',
           state_prompt: `Schedule appropriate follow-up communication.
-                        Ask about preferred communication method and timing.
-                        Confirm their contact information and provide clear next steps.`
+                         Ask about preferred communication method and timing.
+                         Confirm their contact information and provide clear next steps.`
         }
       ],
       starting_state: 'initial_engagement',
