@@ -4,6 +4,7 @@ import Navbar from './components/Navbar';
 import Settings from './components/Settings';
 import Analytics from './components/Analytics';
 import Reports from './components/Reports';
+import Footer from './components/Footer';
 import './App.css';
 
 function App() {
@@ -42,6 +43,7 @@ function App() {
       <main className="app-main">
         {renderPage()}
       </main>
+    <Footer />  
     </div>
   );
 }
