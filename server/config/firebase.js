@@ -69,8 +69,8 @@ async function initializeFirebase() {
     return { app: firebaseApp, db };
 
   } catch (error) {
-    logger.error('Error initializing Firebase:', error);
-    throw error;
+      logger.error('Error initializing Firebase:', error);
+      throw error;
   }
 }
 
@@ -129,7 +129,8 @@ async function createStudent(studentData) {
     const student = {
       ...studentData,
       id: newStudentRef.key,
-      status: 'inquiry_submitted',
+      status: studentData.status || 'inquiry_submitted',
+      riskLevel: studentData.riskLevel || 'low',
       createdAt: admin.database.ServerValue.TIMESTAMP,
       updatedAt: admin.database.ServerValue.TIMESTAMP,
       lastActivity: admin.database.ServerValue.TIMESTAMP,
@@ -171,7 +172,8 @@ async function updateStudent(studentId, updateData) {
     
     // Get updated student data
     const updatedSnapshot = await studentRef.once('value');
-    return updatedSnapshot.val();
+    const updatedStudent = { id: updatedSnapshot.key, ...updatedSnapshot.val() };
+    return updatedStudent;
   } catch (error) {
     logger.error('Error updating student:', error);
     throw error;
@@ -190,7 +192,7 @@ async function getStudent(studentId) {
       return null;
     }
     
-    return snapshot.val();
+    return { id: snapshot.key, ...snapshot.val() };
   } catch (error) {
     logger.error('Error getting student:', error);
     throw error;
@@ -198,15 +200,39 @@ async function getStudent(studentId) {
 }
 
 /**
- * Get students with specific status
+ * Get students with optional filters, pagination, and sorting
+ *
+ * @param {object} filters - Object containing filters (e.g., { status: 'pending', riskLevel: 'high' })
+ * @param {number} limit - Number of results to return
+ * @param {number} page - Page number for pagination
+ * @param {string} sortBy - Field to sort by
+ * @param {string} sortOrder - 'asc' or 'desc'
  */
-async function getStudentsByStatus(status, limit = 50) {
+async function getStudents(filters = {}, limit = 50, page = 1, sortBy = 'createdAt', sortOrder = 'desc') {
   try {
-    const studentsRef = db.ref('students');
-    const query = studentsRef.orderByChild('status').equalTo(status).limitToFirst(limit);
-    
+    let studentsRef = db.ref('students');
+    let query = studentsRef.orderByChild(sortBy);
+
+    // Apply filters
+    if (filters.status && filters.status !== 'all') {
+      query = query.equalTo(filters.status);
+    }
+    if (filters.riskLevel && filters.riskLevel !== 'all') {
+      query = query.equalTo(filters.riskLevel);
+    }
+    // Note: Firebase Realtime Database does not support multiple `equalTo` filters
+    // A more complex query or filtering client-side may be needed for multiple fields.
+    // For now, this will prioritize filtering by `sortBy` field.
+
+    // Handle sort order
+    if (sortOrder === 'desc') {
+      query = query.limitToLast(limit * page);
+    } else {
+      query = query.limitToFirst(limit * page);
+    }
+
     const snapshot = await query.once('value');
-    const students = [];
+    let students = [];
     
     snapshot.forEach((childSnapshot) => {
       students.push({
@@ -214,10 +240,20 @@ async function getStudentsByStatus(status, limit = 50) {
         ...childSnapshot.val()
       });
     });
+
+    // Manually slice for pagination
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + limit;
+
+    // Reverse the array if sorting in descending order, as limitToLast returns the last N items
+    if (sortOrder === 'desc') {
+        students.reverse();
+    }
     
-    return students;
+    return students.slice(startIndex, endIndex);
+
   } catch (error) {
-    logger.error('Error getting students by status:', error);
+    logger.error('Error getting students:', error);
     throw error;
   }
 }
@@ -329,24 +365,17 @@ async function getAnalytics(dateRange = 7) { // Default 7 days
   try {
     const cutoffTime = Date.now() - (dateRange * 24 * 60 * 60 * 1000);
     
-    // Get students created in date range
-    const studentsSnapshot = await db.ref('students')
-      .orderByChild('createdAt')
-      .startAt(cutoffTime)
-      .once('value');
-    
-    // Get calls in date range
-    const callsSnapshot = await db.ref('calls')
-      .orderByChild('timestamp')
-      .startAt(cutoffTime)
-      .once('value');
-    
-    // Get notifications in date range
-    const notificationsSnapshot = await db.ref('notifications')
-      .orderByChild('timestamp')
-      .startAt(cutoffTime)
-      .once('value');
-    
+    const studentsRef = db.ref('students');
+    const callsRef = db.ref('calls');
+    const notificationsRef = db.ref('notifications');
+
+    // Use a Promise.all to fetch data concurrently
+    const [studentsSnapshot, callsSnapshot, notificationsSnapshot] = await Promise.all([
+      studentsRef.orderByChild('createdAt').startAt(cutoffTime).once('value'),
+      callsRef.orderByChild('timestamp').startAt(cutoffTime).once('value'),
+      notificationsRef.orderByChild('timestamp').startAt(cutoffTime).once('value')
+    ]);
+
     const analytics = {
       dateRange,
       totalStudents: 0,
@@ -377,9 +406,9 @@ async function getAnalytics(dateRange = 7) { // Default 7 days
     });
     
     // Calculate conversion rate
-    const completedApplications = analytics.statusBreakdown['application_completed'] || 0;
+    const convertedStudents = (analytics.statusBreakdown['accepted'] || 0) + (analytics.statusBreakdown['enrolled'] || 0);
     analytics.conversionRate = analytics.totalStudents > 0 
-      ? (completedApplications / analytics.totalStudents * 100).toFixed(2)
+      ? ((convertedStudents / analytics.totalStudents) * 100).toFixed(2)
       : 0;
     
     return analytics;
@@ -396,7 +425,7 @@ module.exports = {
   createStudent,
   updateStudent,
   getStudent,
-  getStudentsByStatus,
+  getStudents, // Updated: Changed function name and signature
   logCall,
   logNotification,
   getIncompleteApplications,

@@ -2,9 +2,9 @@
 const express = require('express');
 const winston = require('winston');
 const router = express.Router();
-
-// Import Firebase functions
-const { getAnalytics } = require('../config/firebase');
+const { getRecentCalls, getStudents } = require('../config/firebase');
+const { generateCounselorBriefing } = require('../config/openai');
+const { asyncHandler } = require('../middleware/errorHandler');
 
 // Configure logger
 const logger = winston.createLogger({
@@ -23,79 +23,69 @@ const logger = winston.createLogger({
 });
 
 /**
- * Get Analytics Data
+ * Get recent call history
  */
-router.get('/analytics', async (req, res) => {
-  try {
-    const { dateRange = '7' } = req.query;
-    
-    logger.info(`Fetching analytics for ${dateRange} days`);
-    
-    const analytics = await getAnalytics(parseInt(dateRange));
+router.get('/calls', asyncHandler(async (req, res) => {
+  const { limit = 50, studentId } = req.query;
+  
+  logger.info(`Fetching recent calls for studentId: ${studentId || 'all'}`);
+  
+  // Use the new getRecentCalls function from firebase.js
+  const calls = await getRecentCalls(studentId, parseInt(limit));
 
-    res.json({
-      status: 'success',
-      analytics
-    });
-
-  } catch (error) {
-    logger.error('Error fetching analytics:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to fetch analytics',
-      error: error.message
-    });
-  }
-});
+  res.json({
+    status: 'success',
+    calls
+  });
+}));
 
 /**
- * Get Recent Calls
+ * Get students requiring counselor attention
  */
-router.get('/calls', async (req, res) => {
-  try {
-    const { limit = 50 } = req.query;
-    
-    logger.info(`Fetching recent calls, limit: ${limit}`);
-    
-    // For now, return empty array - in real implementation, fetch from database
-    res.json({
-      status: 'success',
-      calls: []
-    });
-
-  } catch (error) {
-    logger.error('Error fetching calls:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to fetch calls',
-      error: error.message
-    });
-  }
-});
+router.get('/escalations', asyncHandler(async (req, res) => {
+  logger.info('Fetching students requiring counselor attention');
+  
+  // Fetch students with the 'counselor_required' status
+  const escalatedStudents = await getStudents({ status: 'counselor_required' });
+  
+  res.json({
+    status: 'success',
+    students: escalatedStudents
+  });
+}));
 
 /**
- * Log Activity
+ * Generate a briefing for a counselor based on a student's history
  */
-router.post('/log', async (req, res) => {
-  try {
-    const logData = req.body;
-    
-    logger.info('Logging activity:', logData);
-    
-    // In real implementation, store in database
-    res.json({
-      status: 'success',
-      message: 'Activity logged successfully'
-    });
-
-  } catch (error) {
-    logger.error('Error logging activity:', error);
-    res.status(500).json({
+router.post('/generate-briefing/:studentId', asyncHandler(async (req, res) => {
+  const { studentId } = req.params;
+  const { recentCalls, recentNotifications, conversationAnalysis } = req.body;
+  
+  logger.info(`Generating counselor briefing for student: ${studentId}`);
+  
+  // The provided body is used to create the briefing.
+  // In a real-world scenario, you would fetch this data from the database.
+  
+  const briefingResult = await generateCounselorBriefing({ 
+    studentId,
+    recentCalls,
+    recentNotifications,
+    conversationAnalysis 
+  });
+  
+  if (!briefingResult.success) {
+    return res.status(500).json({
       status: 'error',
-      message: 'Failed to log activity',
-      error: error.message
+      message: 'Failed to generate counselor briefing',
+      details: briefingResult.error
     });
   }
-});
+  
+  res.status(200).json({
+    status: 'success',
+    briefing: briefingResult.briefing,
+    metadata: briefingResult.metadata
+  });
+}));
 
 module.exports = router;

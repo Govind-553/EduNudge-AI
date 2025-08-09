@@ -1,6 +1,7 @@
 // server/services/analytics.js
 const winston = require('winston');
 const moment = require('moment-timezone');
+const { getStudents, getAnalytics, getRecentCalls } = require('../config/firebase');
 
 // Configure logger
 const logger = winston.createLogger({
@@ -32,8 +33,8 @@ class AnalyticsService {
       const endDate = moment().endOf('day');
       const startDate = moment().subtract(dateRange, 'days').startOf('day');
 
-      // Mock data - replace with actual database queries
-      const studentData = await this.getStudentData(startDate, endDate, filters);
+      // Fetch student data from Firebase instead of mock data
+      const studentData = await getStudents({ dateRange });
 
       const analytics = {
         overview: {
@@ -84,8 +85,8 @@ class AnalyticsService {
       const endDate = moment().endOf('day');
       const startDate = moment().subtract(dateRange, 'days').startOf('day');
 
-      // Mock data - replace with actual database queries
-      const callData = await this.getCallData(startDate, endDate, filters);
+      // Fetch call data from Firebase
+      const callData = await getRecentCalls(null, 50, filters);
 
       const analytics = {
         summary: {
@@ -148,7 +149,8 @@ class AnalyticsService {
       const endDate = moment().endOf('day');
       const startDate = moment().subtract(dateRange, 'days').startOf('day');
 
-      // Mock data - replace with actual database queries
+      // Fetch notification data from Firebase
+      // You need to implement getNotifications in firebase.js
       const notificationData = await this.getNotificationData(startDate, endDate, filters);
 
       const analytics = {
