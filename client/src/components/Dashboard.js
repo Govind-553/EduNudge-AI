@@ -1,11 +1,10 @@
 // client/src/components/Dashboard.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import './Dashboard.css';
 import Analytics from './Analytics';
 import StudentList from './StudentList';
 import CallHistory from './CallHistory';
-// No need to import sampleData, we will use the backend API
 
 const Dashboard = () => {
     const [students, setStudents] = useState([]);
@@ -18,17 +17,12 @@ const Dashboard = () => {
         dateRange: '7'
     });
 
-    useEffect(() => {
-        fetchDashboardData();
-        const interval = setInterval(fetchDashboardData, 30000); // 30 seconds
-        return () => clearInterval(interval);
-    }, [filters]);
-
-    const fetchDashboardData = async () => {
+    // Corrected: use useCallback to define the function in the component's scope
+    // This makes the function callable by the refresh button and child components
+    const fetchDashboardData = useCallback(async () => {
         try {
             setLoading(true);
 
-            // Updated API call to the new /api/students endpoint with filters
             const studentsResponse = await axios.get('/api/students', {
                 params: {
                     status: filters.status,
@@ -37,13 +31,11 @@ const Dashboard = () => {
             });
             setStudents(studentsResponse.data.students || []);
 
-            // Updated API call to the new /api/admin/analytics endpoint
             const analyticsResponse = await axios.get('/api/admin/analytics', {
                 params: { dateRange: filters.dateRange }
             });
             setAnalytics(analyticsResponse.data.analytics || {});
 
-            // Updated API call to the new /api/admin/calls endpoint
             const callsResponse = await axios.get('/api/admin/calls', {
                 params: { limit: 50 }
             });
@@ -54,7 +46,13 @@ const Dashboard = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [filters]); // Dependency array ensures the function is recreated only when filters change
+
+    useEffect(() => {
+        fetchDashboardData();
+        const interval = setInterval(fetchDashboardData, 30000); // 30 seconds
+        return () => clearInterval(interval);
+    }, [fetchDashboardData]); // Now the dependency array correctly includes the function
 
     const triggerVoiceCall = async (studentId) => {
         try {
@@ -64,7 +62,7 @@ const Dashboard = () => {
                 reason: 'manual_trigger'
             });
             alert('Voice call initiated successfully!');
-            fetchDashboardData();
+            fetchDashboardData(); // Re-fetch data to show the new call
         } catch (error) {
             console.error('Error triggering voice call:', error);
             alert('Failed to initiate voice call');
@@ -79,7 +77,7 @@ const Dashboard = () => {
                 urgency: 'normal'
             });
             alert('WhatsApp message sent successfully!');
-            fetchDashboardData();
+            fetchDashboardData(); // Re-fetch data
         } catch (error) {
             console.error('Error sending WhatsApp message:', error);
             alert('Failed to send WhatsApp message');
@@ -92,7 +90,7 @@ const Dashboard = () => {
                 status: newStatus,
                 updatedBy: 'counselor'
             });
-            fetchDashboardData();
+            fetchDashboardData(); // Re-fetch data
         } catch (error) {
             console.error('Error updating student status:', error);
             alert('Failed to update student status');
@@ -121,6 +119,7 @@ const Dashboard = () => {
     };
 
     const formatDate = (dateString) => {
+        if (!dateString) return 'N/A';
         return new Date(dateString).toLocaleDateString('en-US', {
             year: 'numeric',
             month: 'short',
@@ -150,8 +149,7 @@ const Dashboard = () => {
                 </div>
             </header>
 
-            {/* This component will now receive real data fetched from the API */}
-            <Analytics analytics={analytics} filters={filters} students={students} />
+            <Analytics analyticsData={analytics} />
 
             <section className="filters-section">
                 <div className="filters">

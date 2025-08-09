@@ -4,7 +4,7 @@ const winston = require('winston');
 const router = express.Router();
 
 const VoiceAgentService = require('../services/voiceAgent');
-const { validators } = require('../middleware/validation');
+const { validators, validate } = require('../middleware/validation'); // Corrected import
 const { asyncHandler } = require('../middleware/errorHandler');
 
 // Configure logger for this module
@@ -26,33 +26,36 @@ const logger = winston.createLogger({
 /**
  * Endpoint to initiate an intelligent voice call to a student.
  */
-router.post('/create-call', validators.voice.createCall, asyncHandler(async (req, res) => {
-  const { studentId, callReason, priority, customContext, agentPersonality } = req.body;
+router.post('/create-call', 
+  validators.voice.createCall, // Corrected validator reference
+  validate, // Add the validation middleware
+  asyncHandler(async (req, res) => {
+    const { studentId, callReason, priority, customContext, agentPersonality } = req.body;
   
-  logger.info(`Received request to create call for student: ${studentId}`);
+    logger.info(`Received request to create call for student: ${studentId}`);
 
-  // Use the updated VoiceAgentService to create the intelligent call
-  const result = await VoiceAgentService.createIntelligentCall({ 
-    studentId, 
-    callReason, 
-    priority, 
-    customContext, 
-    agentPersonality
-  });
-  
-  if (!result.success) {
-    return res.status(500).json({ 
-      status: 'error', 
-      message: 'Failed to initiate intelligent voice call', 
-      details: result.error 
+    // Use the updated VoiceAgentService to create the intelligent call
+    const result = await VoiceAgentService.createIntelligentCall({ 
+      studentId, 
+      callReason, 
+      priority, 
+      customContext, 
+      agentPersonality
     });
-  }
   
-  res.status(200).json({ 
-    status: 'success', 
-    message: 'Intelligent voice call initiated successfully', 
-    call: result.call 
-  });
+    if (!result.success) {
+      return res.status(500).json({ 
+        status: 'error', 
+        message: 'Failed to initiate intelligent voice call', 
+        details: result.error 
+      });
+    }
+  
+    res.status(200).json({ 
+      status: 'success', 
+      message: 'Intelligent voice call initiated successfully', 
+      call: result.call 
+    });
 }));
 
 
@@ -78,7 +81,7 @@ router.post('/webhook/call-completion', asyncHandler(async (req, res) => {
 
   res.status(200).json({ 
     status: 'success', 
-    message: 'Call completion webhook processed successfully',
+    message: 'Retell webhook processed successfully',
     data: result
   });
 }));

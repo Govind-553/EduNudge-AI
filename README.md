@@ -25,7 +25,7 @@ EduNudge-AI/
 
 ## 📋 Prerequisites
 
-- Node.js 16+
+- Node.js 20+
 - Firebase Account
 - Retell AI Account
 - OpenAI API Key
@@ -158,26 +158,6 @@ N8N_API_KEY=your-n8n-api-key
 - Webhook signature verification
 - Rate limiting and CORS protection
 - Environment-based configuration
-
-## 🚀 Deployment
-
-### Production Setup
-```bash
-# Build client
-npm run build
-
-# Deploy to Firebase
-npm run deploy
-
-# Start production server
-npm start
-```
-
-### Docker Deployment
-```bash
-docker build -t edunudge-ai .
-docker run -p 3000:3000 edunudge-ai
-```
 
 ## 🤝 Contributing
 

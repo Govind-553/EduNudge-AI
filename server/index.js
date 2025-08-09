@@ -7,6 +7,7 @@ const dotenv = require('dotenv');
 const rateLimit = require('express-rate-limit');
 const winston = require('winston');
 const expressWinston = require('express-winston');
+const path = require('path');
 
 // Load environment variables
 dotenv.config();
@@ -19,11 +20,14 @@ const adminRoutes = require('./routes/admin');
 
 // Import middleware
 const authMiddleware = require('./middleware/auth');
-const errorHandler = require('./middleware/errorHandler');
+const { errorHandler } = require('./middleware/errorHandler'); 
+const { apiLogger } = require('./middleware/logging');  
 
 // Import services
 const { initializeFirebase } = require('./config/firebase');
 const { initializeRetell } = require('./config/retell');
+const { initializeWhatsapp } = require('./config/whatsapp');
+const { initializeOpenAI } = require('./config/openai');
 const { initializeScheduler } = require('./utils/scheduler');
 
 // Initialize Express app
@@ -70,7 +74,7 @@ app.use('/api/', limiter);
 // More restrictive rate limiting for webhooks
 const webhookLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
-  max: 100, // limit each IP to 100 requests per minute
+  max: 100,
   message: {
     error: 'Too many webhook requests, please try again later.'
   }
@@ -156,6 +160,14 @@ async function startServer() {
     // Initialize Retell AI
     await initializeRetell();
     logger.info('Retell AI initialized successfully');
+
+    // Initialize OpenAI
+    await initializeOpenAI();
+    logger.info('OpenAI initialized successfully');
+
+    // Initialize WhatsApp service
+    await initializeWhatsapp();
+    logger.info('WhatsApp initialized successfully');
 
     // Initialize scheduler for automated tasks
     initializeScheduler();
