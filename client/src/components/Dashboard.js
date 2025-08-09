@@ -5,6 +5,7 @@ import './Dashboard.css';
 import Analytics from './Analytics';
 import StudentList from './StudentList';
 import CallHistory from './CallHistory';
+// No need to import sampleData, we will use the backend API
 
 const Dashboard = () => {
     const [students, setStudents] = useState([]);
@@ -27,16 +28,22 @@ const Dashboard = () => {
         try {
             setLoading(true);
 
+            // Updated API call to the new /api/students endpoint with filters
             const studentsResponse = await axios.get('/api/students', {
-                params: filters
+                params: {
+                    status: filters.status,
+                    riskLevel: filters.riskLevel
+                }
             });
             setStudents(studentsResponse.data.students || []);
 
+            // Updated API call to the new /api/admin/analytics endpoint
             const analyticsResponse = await axios.get('/api/admin/analytics', {
                 params: { dateRange: filters.dateRange }
             });
-            setAnalytics(analyticsResponse.data || {});
+            setAnalytics(analyticsResponse.data.analytics || {});
 
+            // Updated API call to the new /api/admin/calls endpoint
             const callsResponse = await axios.get('/api/admin/calls', {
                 params: { limit: 50 }
             });
@@ -143,6 +150,7 @@ const Dashboard = () => {
                 </div>
             </header>
 
+            {/* This component will now receive real data fetched from the API */}
             <Analytics analytics={analytics} filters={filters} students={students} />
 
             <section className="filters-section">
