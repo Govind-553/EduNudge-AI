@@ -1,6 +1,7 @@
 // server/config/whatsapp.js
 const axios = require('axios');
 const winston = require('winston');
+const crypto = require('crypto');
 
 // Configure logger for this module
 const logger = winston.createLogger({
@@ -70,14 +71,23 @@ async function initializeWhatsApp() {
  */
 async function testWhatsAppConnection() {
   try {
+    const config = getWhatsAppConfig();
+    
+    // In a production environment, you would make a real API call.
+    // For this project, we will use a mock check.
+    if (config.apiToken.startsWith('MOCK')) {
+      logger.info('WhatsApp API connection test skipped due to mock credentials');
+      return true;
+    }
+    
     const headers = {
-      'Authorization': `Bearer ${whatsappConfig.apiToken}`,
+      'Authorization': `Bearer ${config.apiToken}`,
       'Content-Type': 'application/json'
     };
 
     // Test by getting phone number info
     const response = await axios.get(
-      `https://graph.facebook.com/v18.0/${whatsappConfig.phoneNumberId}`,
+      `https://graph.facebook.com/v18.0/${config.phoneNumberId}`,
       { headers }
     );
 
@@ -109,6 +119,17 @@ function getWhatsAppConfig() {
 async function sendTextMessage(toNumber, message, context = {}) {
   try {
     const config = getWhatsAppConfig();
+    
+    if (config.apiToken.startsWith('MOCK')) {
+      logger.info('Simulating WhatsApp text message send with mock API');
+      return {
+        success: true,
+        messageId: `mock_message_${Date.now()}`,
+        status: 'sent',
+        sentAt: new Date().toISOString(),
+        context
+      };
+    }
     
     const data = {
       messaging_product: 'whatsapp',
@@ -152,6 +173,18 @@ async function sendTextMessage(toNumber, message, context = {}) {
 async function sendTemplateMessage(toNumber, templateName, templateParams = [], context = {}) {
   try {
     const config = getWhatsAppConfig();
+    
+    if (config.apiToken.startsWith('MOCK')) {
+      logger.info('Simulating WhatsApp template message send with mock API');
+      return {
+        success: true,
+        messageId: `mock_template_${Date.now()}`,
+        status: 'sent',
+        templateName,
+        sentAt: new Date().toISOString(),
+        context
+      };
+    }
     
     const data = {
       messaging_product: 'whatsapp',
@@ -203,58 +236,23 @@ async function sendTemplateMessage(toNumber, templateName, templateParams = [], 
 }
 
 /**
- * Send a multimedia message (image, document, etc.)
- */
-async function sendMediaMessage(toNumber, mediaType, mediaUrl, caption = '', context = {}) {
-  try {
-    const config = getWhatsAppConfig();
-    
-    const data = {
-      messaging_product: 'whatsapp',
-      to: toNumber,
-      type: mediaType,
-      [mediaType]: {
-        link: mediaUrl,
-        caption: caption
-      }
-    };
-
-    const headers = {
-      'Authorization': `Bearer ${config.apiToken}`,
-      'Content-Type': 'application/json'
-    };
-
-    const response = await axios.post(config.apiUrl, data, { headers });
-    
-    logger.info(`WhatsApp ${mediaType} message sent to ${toNumber}: ${response.data.messages[0].id}`);
-    
-    return {
-      success: true,
-      messageId: response.data.messages[0].id,
-      status: response.data.messages[0].message_status,
-      mediaType,
-      mediaUrl,
-      sentAt: new Date().toISOString(),
-      context
-    };
-
-  } catch (error) {
-    logger.error(`Error sending WhatsApp ${mediaType} message:`, error);
-    throw {
-      success: false,
-      error: error.message,
-      details: error.response?.data
-    };
-  }
-}
-
-/**
  * Send interactive button message
  */
 async function sendButtonMessage(toNumber, bodyText, buttons, context = {}) {
   try {
     const config = getWhatsAppConfig();
     
+    if (config.apiToken.startsWith('MOCK')) {
+      logger.info('Simulating WhatsApp button message send with mock API');
+      return {
+        success: true,
+        messageId: `mock_button_${Date.now()}`,
+        status: 'sent',
+        sentAt: new Date().toISOString(),
+        context
+      };
+    }
+
     const data = {
       messaging_product: 'whatsapp',
       to: toNumber,
@@ -308,7 +306,6 @@ async function sendButtonMessage(toNumber, bodyText, buttons, context = {}) {
  */
 function verifyWebhookSignature(payload, signature, verifyToken) {
   try {
-    const crypto = require('crypto');
     const expectedSignature = crypto
       .createHmac('sha256', verifyToken)
       .update(payload)
@@ -341,7 +338,7 @@ function handleWebhookVerification(mode, token, challenge) {
  */
 async function processIncomingMessage(webhookData) {
   try {
-    const { logNotification, updateStudent } = require('./firebase');
+    const { logNotification, updateStudent, getStudentByPhone } = require('./firebase');
     
     // Extract message data
     const entry = webhookData.entry[0];
@@ -361,17 +358,31 @@ async function processIncomingMessage(webhookData) {
         content: extractMessageContent(message)
       };
       
+      // Find student by phone number (you will need to implement this function)
+      const student = await getStudentByPhone(messageData.fromNumber);
+      if (student) {
+        messageData.studentId = student.id;
+      }
+
       // Log the incoming message
       await logNotification({
         type: 'whatsapp_received',
         fromNumber: messageData.fromNumber,
         content: messageData.content,
         messageId: messageData.messageId,
-        status: 'received'
+        status: 'received',
+        studentId: messageData.studentId
       });
       
       // Process the message content for student updates
-      await processMessageForStudentUpdate(messageData);
+      if (student) {
+        await updateStudent(student.id, {
+          lastWhatsAppMessage: messageData.content,
+          lastWhatsAppInteraction: messageData.timestamp,
+          lastActivity: messageData.timestamp,
+          status: 'engaged'
+        });
+      }
       
       logger.info(`Processed incoming WhatsApp message: ${messageData.messageId}`);
       return messageData;
@@ -416,50 +427,20 @@ function extractMessageContent(message) {
 }
 
 /**
- * Process message content to update student information
- */
-async function processMessageForStudentUpdate(messageData) {
-  try {
-    const { getStudentsByStatus } = require('./firebase');
-    
-    // Try to find student by phone number
-    const students = await getStudentsByStatus('inquiry_submitted');
-    const student = students.find(s => s.phone === messageData.fromNumber);
-    
-    if (student) {
-      const { updateStudent } = require('./firebase');
-      
-      // Update student with message interaction
-      await updateStudent(student.id, {
-        lastWhatsAppMessage: messageData.content,
-        lastWhatsAppInteraction: messageData.timestamp,
-        responseReceived: true,
-        status: 'engaged' // Update status to show engagement
-      });
-      
-      logger.info(`Updated student ${student.id} based on WhatsApp message`);
-    }
-    
-  } catch (error) {
-    logger.error('Error processing message for student update:', error);
-  }
-}
-
-/**
  * Handle message status updates (delivered, read, etc.)
  */
 async function handleMessageStatusUpdate(status) {
   try {
-    const { logNotification } = require('./firebase');
+    const { logNotification, getNotificationByExternalId } = require('./firebase');
     
-    await logNotification({
-      type: 'whatsapp_status',
-      messageId: status.id,
-      recipientId: status.recipient_id,
-      status: status.status,
-      timestamp: new Date(parseInt(status.timestamp) * 1000).toISOString()
-    });
-    
+    // Find the original notification by its external ID
+    const notification = await getNotificationByExternalId(status.id);
+    if (notification) {
+      await updateNotificationStatus(notification.id, status.status, {
+        deliveredAt: new Date(parseInt(status.timestamp) * 1000).toISOString()
+      });
+    }
+
     logger.info(`Updated message status: ${status.id} - ${status.status}`);
     
   } catch (error) {
@@ -468,50 +449,46 @@ async function handleMessageStatusUpdate(status) {
 }
 
 /**
- * Create message templates for different scenarios
+ * Get message templates for different scenarios
  */
-function getMessageTemplates() {
-  return {
-    welcome: {
-      name: 'welcome_message',
-      text: 'Hi {{student_name}}! 👋 Thank you for your interest in {{institution_name}}. We\'re excited to help you with your admission process. How can we assist you today?'
-    },
-    followUp: {
-      name: 'follow_up',
-      text: 'Hi {{student_name}}, I wanted to follow up on your application to {{institution_name}}. Our records show you started the process {{days_ago}} days ago. Do you need any help completing your application? 📚'
-    },
-    documentReminder: {
-      name: 'document_reminder',
-      text: 'Hi {{student_name}}, just a friendly reminder that we\'re still missing some documents for your application. You can upload them here: {{upload_link}} 📄'
-    },
-    scholarshipInfo: {
-      name: 'scholarship_info',
-      text: 'Great news {{student_name}}! 🎉 You may be eligible for scholarships at {{institution_name}}. Would you like to learn more about financial aid opportunities?'
-    },
-    deadlineReminder: {
-      name: 'deadline_reminder',
-      text: 'Hi {{student_name}}, just a heads up that the application deadline for {{program_name}} is coming up on {{deadline_date}}. Need help finishing your application? ⏰'
-    },
-    callScheduled: {
-      name: 'call_scheduled',
-      text: 'Hi {{student_name}}, we\'ve scheduled a call for {{call_time}} to discuss your application. Our counselor will call you at {{phone_number}}. Looking forward to speaking with you! 📞'
-    }
-  };
-}
+const MESSAGE_TEMPLATES = {
+  welcome: {
+    name: 'welcome_message',
+    text: 'Hi {{student_name}}! Thank you for your interest in {{institution_name}}. We\'re excited to help you with your admission process. How can we assist you today?'
+  },
+  followUp: {
+    name: 'follow_up',
+    text: 'Hi {{student_name}}, I wanted to follow up on your application to {{institution_name}}. Our records show you started the process {{days_ago}} days ago. Do you need any help completing your application? 🙋‍♂️'
+  },
+  documentReminder: {
+    name: 'document_reminder',
+    text: 'Hi {{student_name}}, just a friendly reminder that we\'re still missing some documents for your application. You can upload them here: {{upload_link}} 📝'
+  },
+  scholarshipInfo: {
+    name: 'scholarship_info',
+    text: 'Great news {{student_name}}! 💰 You may be eligible for scholarships at {{institution_name}}. Would you like to learn more about financial aid opportunities?'
+  },
+  deadlineReminder: {
+    name: 'deadline_reminder',
+    text: 'Hi {{student_name}}, just a heads up that the application deadline for {{program_name}} is coming up on {{deadline_date}}. Need help finishing your application? 🗓️'
+  },
+  callScheduled: {
+    name: 'call_scheduled',
+    text: 'Hi {{student_name}}, we\'ve scheduled a call for {{call_time}} to discuss your application. Our counselor will call you at {{phone_number}}. Looking forward to speaking with you! 📞'
+  }
+};
 
 /**
  * Send personalized message using template
  */
 async function sendPersonalizedMessage(toNumber, templateKey, variables, context = {}) {
   try {
-    const templates = getMessageTemplates();
-    const template = templates[templateKey];
+    const template = MESSAGE_TEMPLATES[templateKey];
     
     if (!template) {
       throw new Error(`Template '${templateKey}' not found`);
     }
     
-    // Replace variables in template
     let message = template.text;
     Object.keys(variables).forEach(key => {
       const regex = new RegExp(`{{${key}}}`, 'g');
@@ -535,12 +512,11 @@ module.exports = {
   getWhatsAppConfig,
   sendTextMessage,
   sendTemplateMessage,
-  sendMediaMessage,
   sendButtonMessage,
   sendPersonalizedMessage,
   processIncomingMessage,
   handleWebhookVerification,
   verifyWebhookSignature,
-  getMessageTemplates,
+  MESSAGE_TEMPLATES,
   testWhatsAppConnection
 };

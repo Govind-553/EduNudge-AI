@@ -5,9 +5,9 @@ const {
   sendTextMessage,
   sendInteractiveMessage,
   sendBulkMessages,
-  MESSAGE_TEMPLATES
-} = require('../config/whatsapp');
-const { logNotification } = require('../config/firebase');
+  MESSAGE_TEMPLATES 
+} = require('../config/whatsapp'); 
+const { logNotification, getStudent } = require('../config/firebase');
 
 // Configure logger
 const logger = winston.createLogger({
