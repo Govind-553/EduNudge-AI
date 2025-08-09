@@ -135,7 +135,7 @@ const Dashboard = () => {
     return (
         <div className="dashboard">
             <header className="dashboard-header">
-                <h1>EduNudge AI - Admission Management Dashboard</h1>
+                <h1>Admission Management Dashboard</h1>
                 <div className="header-actions">
                     <button onClick={fetchDashboardData} className="refresh-btn">
                         🔄 Refresh

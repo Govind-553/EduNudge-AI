@@ -1,0 +1,64 @@
+/* client/src/components/Settings.css */
+.settings-page {
+    padding: var(--space-32);
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.settings-container {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-24);
+}
+
+.settings-title {
+    font-size: 2rem;
+    font-weight: var(--font-weight-bold);
+    color: var(--color-text-primary);
+}
+
+.settings-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-24);
+    box-shadow: var(--shadow-sm);
+}
+
+.settings-card-title {
+    font-size: 1.25rem;
+    font-weight: var(--font-weight-semibold);
+    margin-bottom: var(--space-4);
+}
+
+.settings-card-description {
+    font-size: 1rem;
+    color: var(--color-text-secondary);
+    margin-bottom: var(--space-24);
+}
+
+.theme-switcher {
+    display: inline-flex;
+    background-color: var(--color-background);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+}
+
+.theme-btn {
+    padding: var(--space-8) var(--space-16);
+    font-size: 0.875rem;
+    font-weight: var(--font-weight-medium);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-secondary);
+    transition: all 150ms ease-in-out;
+}
+
+.theme-btn:hover {
+    color: var(--color-text-primary);
+}
+
+.theme-btn.active {
+    background-color: var(--color-surface);
+    color: var(--color-text-primary);
+    box-shadow: var(--shadow-sm);
+}
