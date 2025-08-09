@@ -7,7 +7,7 @@
 - **🎙️ Voice AI Agent**: Emotion-aware voice conversations using Retell AI
 - **🔄 Workflow Automation**: Automated follow-ups and monitoring with n8n
 - **🧠 AI Intelligence**: Dynamic script generation with OpenAI GPT
-- **💬 Multi-Channel Communication**: WhatsApp, Email, and Voice notifications
+- **💬 Multi-Channel Communication**: WhatsApp, Email, and Voice notifications    //whatsapp feature is partially functional
 - **📊 Real-time Analytics**: Dashboard with dropout risk assessment
 - **🎯 Personalized Nudging**: Behavioral psychology-based interventions
 
