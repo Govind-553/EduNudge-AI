@@ -198,4 +198,15 @@ docker run -p 3000:3000 edunudge-ai
 
 ---
 
+## 🧑‍🤝‍🧑 Team
+
+| Name       | Role                                 |
+|------------|--------------------------------------|
+| **Govind**     | Team Lead, Client-Server Management,  |
+| **Abhiruchi**  | Backend Developer, AI                 |
+| **Sahil**      | Firebase, UI/UX Design                |
+| **Nishank**    | Testing & Integration                 |
+
+---
+
 **EduNudge AI** - Transforming educational admissions through intelligent automation and empathetic AI interactions.
