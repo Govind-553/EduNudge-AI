@@ -10,7 +10,7 @@ const expressWinston = require('express-winston');
 const path = require('path');
 
 // Load environment variables
-dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 
 // Import routes
 const webhookRoutes = require('./routes/webhook');
@@ -19,7 +19,7 @@ const studentRoutes = require('./routes/students');
 const adminRoutes = require('./routes/admin');
 
 // Import middleware
-const authMiddleware = require('./middleware/auth');
+const { authenticate } = require('./middleware/auth');
 const { errorHandler } = require('./middleware/errorHandler'); 
 const { apiLogger } = require('./middleware/logging');  
 
@@ -124,9 +124,9 @@ app.get('/api', (req, res) => {
 
 // API Routes
 app.use('/api/webhook', webhookLimiter, webhookRoutes);
-app.use('/api/voice', authMiddleware, voiceRoutes);
-app.use('/api/students', authMiddleware, studentRoutes);
-app.use('/api/admin', authMiddleware, adminRoutes);
+app.use('/api/voice', authenticate, voiceRoutes);
+app.use('/api/students', authenticate, studentRoutes);
+app.use('/api/admin', authenticate, adminRoutes);
 
 // Serve static files (for React dashboard if built)
 app.use(express.static('client/build'));

@@ -1,5 +1,5 @@
 // server/config/retell.js
-const Retell = require('retell-sdk');
+const { Retell } = require('retell-sdk');
 const winston = require('winston');
 
 // Configure logger for this module
